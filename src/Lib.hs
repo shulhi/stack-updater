@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 module Lib
@@ -9,6 +10,7 @@ module Lib
 
 import Data.Text (Text)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import qualified Data.Yaml as Y
 import Data.Yaml
     ( FromJSON(..)
@@ -16,9 +18,10 @@ import Data.Yaml
     , (.:?) )
 import Text.RawString.QQ
 import Control.Applicative
+import Data.Attoparsec.Text
+import Data.Attoparsec.Text as AT
+import Text.Regex (mkRegex, subRegex)
 
-someFunc :: IO ()
-someFunc = print $ (Y.decodeEither sampleYaml :: Either String Config)
 
 sampleYaml :: ByteString
 sampleYaml = [r|
@@ -30,7 +33,56 @@ packages:
   - location:
       git: git@github.com
       commit: 68ec213
+flags: {}
 |]
+
+
+someFunc :: IO ()
+someFunc = do
+  print $ (Y.decodeEither sampleYaml :: Either String Config)
+
+
+someFunc' :: IO ()
+someFunc' = do
+  e <- (Y.decodeEither <$> readStackConfig "./sample-stack.yaml") :: IO (Either String Config)
+  case e of
+    Left _ -> putStrLn "parser error"
+    Right (Config packages) -> print packages
+
+
+readStackConfig :: FilePath
+                -> IO ByteString
+readStackConfig path = do
+  contents <- BS.readFile path
+  return contents
+
+
+parseGitUrl :: Text -> Either String GitDetails
+parseGitUrl url = flip parseOnly url $ choice [parseGitHttps, parseGitSsh]
+
+
+parseGitHttps :: Parser GitDetails
+parseGitHttps = do
+  string "https://github.com/"
+  username <- takeTill (=='/')
+  AT.take 1
+  repo <- takeTill (=='.')
+  return GitDetails{..}
+
+
+parseGitSsh :: Parser GitDetails
+parseGitSsh = do
+  string "git@github.com:"
+  username <- takeTill (=='/')
+  AT.take 1
+  repo <- takeTill (=='.')
+  return GitDetails{..}
+
+
+data GitDetails = GitDetails
+  { username :: Text
+  , repo     :: Text
+  } deriving (Show, Eq)
 
 
 data Config = Config
@@ -50,8 +102,8 @@ data Location = SimpleLocation Text
 
 
 data GitLocation = GitLocation
-  { git :: Maybe String
-  , commit :: Maybe String
+  { git :: Maybe Text
+  , commit :: Maybe Text
   } deriving (Show, Eq)
 
 
