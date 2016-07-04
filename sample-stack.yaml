@@ -37,6 +37,12 @@ resolver: lts-6.6
 # will not be run. This is useful for tweaking upstream packages.
 packages:
   - location: something
+  - location:
+      git: git@github.com:shulhi/somerepo.git
+      commit: 23d3ef67
+  - location:
+      git: git@github.com:shulhi/otherrepo.git
+      commit: 55ff22g3
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps: []

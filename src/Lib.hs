@@ -9,8 +9,10 @@ module Lib
 
 
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BSL
 import qualified Data.Yaml as Y
 import Data.Yaml
     ( FromJSON(..)
@@ -21,6 +23,7 @@ import Control.Applicative
 import Data.Attoparsec.Text
 import Data.Attoparsec.Text as AT
 import Text.Regex (mkRegex, subRegex)
+import Data.Maybe (fromJust)
 
 
 sampleYaml :: ByteString
@@ -44,10 +47,21 @@ someFunc = do
 
 someFunc' :: IO ()
 someFunc' = do
+  contents <- BSL.unpack <$> readStackConfig "./sample-stack.yaml"
   e <- (Y.decodeEither <$> readStackConfig "./sample-stack.yaml") :: IO (Either String Config)
   case e of
     Left _ -> putStrLn "parser error"
-    Right (Config packages) -> print packages
+    Right (Config packages) -> do
+      let commits = filter (/=Nothing) $ fmap (\p -> extractCommits p) packages
+          regexes = mkRegex . T.unpack . fromJust <$> commits
+          newContent = foldl (\content rgx -> subRegex rgx content "newcommit") contents regexes
+      print newContent
+      print commits
+      return ()
+  where
+    extractCommits p = case location p of
+                         RemoteLocation remote -> commit remote
+                         _ -> mempty
 
 
 readStackConfig :: FilePath
