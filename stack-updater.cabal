@@ -28,6 +28,7 @@ library
                      , either
                      , containers
                      , vector
+                     , optparse-applicative
   default-language:    Haskell2010
 
 executable stack-updater-exe
@@ -46,6 +47,7 @@ executable stack-updater-exe
                      , either
                      , containers
                      , vector
+                     , optparse-applicative
   default-language:    Haskell2010
 
 test-suite stack-updater-test
