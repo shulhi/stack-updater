@@ -23,6 +23,11 @@ library
                      , raw-strings-qq
                      , attoparsec
                      , regex-compat
+                     , github
+                     , mtl
+                     , either
+                     , containers
+                     , vector
   default-language:    Haskell2010
 
 executable stack-updater-exe
@@ -36,6 +41,11 @@ executable stack-updater-exe
                      , bytestring
                      , attoparsec
                      , regex-compat
+                     , github
+                     , mtl
+                     , either
+                     , containers
+                     , vector
   default-language:    Haskell2010
 
 test-suite stack-updater-test

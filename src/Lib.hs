@@ -8,22 +8,32 @@ module Lib
     ) where
 
 
-import Data.Text (Text)
-import qualified Data.Text as T
-import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BSL
-import qualified Data.Yaml as Y
-import Data.Yaml
-    ( FromJSON(..)
-    , (.:)
-    , (.:?) )
-import Text.RawString.QQ
-import Control.Applicative
-import Data.Attoparsec.Text
-import Data.Attoparsec.Text as AT
-import Text.Regex (mkRegex, subRegex)
-import Data.Maybe (fromJust)
+import            Text.RawString.QQ
+import            Text.Regex (mkRegex, subRegex)
+
+import            Data.Text (Text)
+import qualified  Data.Text as T
+import            Data.ByteString (ByteString)
+import qualified  Data.ByteString as BS
+import qualified  Data.ByteString.Char8 as BSL
+import qualified  Data.Yaml as Y
+import            Data.Yaml ( FromJSON(..)
+                            , (.:)
+                            , (.:?) )
+import            Data.Attoparsec.Text
+import            Data.Attoparsec.Text as AT
+import            Data.Maybe (catMaybes, fromJust)
+import            Data.Monoid ((<>))
+import            Data.Vector (Vector)
+import            Data.Map.Lazy (Map)
+import qualified  Data.Map.Lazy as M
+
+import            Control.Applicative
+import            Control.Monad (forM_)
+import            Control.Monad.Trans (liftIO)
+import            Control.Monad.Trans.Either (EitherT, runEitherT, hoistEither, left, right)
+
+import qualified  GitHub.Endpoints.Repos.Commits as GH
 
 
 sampleYaml :: ByteString
@@ -52,16 +62,44 @@ someFunc' = do
   case e of
     Left _ -> putStrLn "parser error"
     Right (Config packages) -> do
-      let commits = filter (/=Nothing) $ fmap (\p -> extractCommits p) packages
-          regexes = mkRegex . T.unpack . fromJust <$> commits
+      let locations = catMaybes $ fmap (\p -> extractGitLocations p) packages
+          regexes = mkRegex . T.unpack . commit <$> locations
           newContent = foldl (\content rgx -> subRegex rgx content "newcommit") contents regexes
-      print newContent
-      print commits
-      return ()
+          gitInfos = fmap (\loc -> GitInfo loc $ parseGitUrl . git $ loc) locations
+      sequence_ $ getCommits <$> gitInfos
   where
-    extractCommits p = case location p of
-                         RemoteLocation remote -> commit remote
-                         _ -> mempty
+    extractGitLocations p = case location p of
+                              RemoteLocation remote -> Just remote
+                              _ -> Nothing
+
+
+getCommits :: GitInfo
+           -> IO ()
+getCommits info = do
+  res <- runEitherT $ do
+    details  <- hoistEither $ gitDetails info
+    eCommits <- liftIO $ GH.commitsFor' (Just $ GH.BasicAuth user password) (mkUsername details) (mkRepo details)
+    case eCommits of
+      Left err -> left $ show err
+      Right commits -> right commits
+  case res of
+    Left err -> print err
+    Right vcs -> do
+      print info
+      forM_ vcs (\vc -> print $ GH.gitCommitMessage (GH.commitGitCommit vc))
+  where
+    user = "shulhi"
+    password = ""
+    mkUsername = GH.mkOwnerName . username
+    mkRepo = GH.mkRepoName . repo
+
+
+mkCommitMap :: GitDetails
+            -> Vector GH.Commit
+            -> Map Text (Vector GH.Commit)
+mkCommitMap details commits = M.singleton repoId commits
+  where
+    repoId = (username details) <> "/" <> (repo details)
 
 
 readStackConfig :: FilePath
@@ -93,6 +131,12 @@ parseGitSsh = do
   return GitDetails{..}
 
 
+data GitInfo = GitInfo
+  { gitLocation :: GitLocation
+  , gitDetails :: Either String GitDetails
+  } deriving (Show, Eq)
+
+
 data GitDetails = GitDetails
   { username :: Text
   , repo     :: Text
@@ -116,8 +160,8 @@ data Location = SimpleLocation Text
 
 
 data GitLocation = GitLocation
-  { git :: Maybe Text
-  , commit :: Maybe Text
+  { git :: Text
+  , commit :: Text
   } deriving (Show, Eq)
 
 

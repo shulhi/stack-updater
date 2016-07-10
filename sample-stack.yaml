@@ -38,10 +38,10 @@ resolver: lts-6.6
 packages:
   - location: something
   - location:
-      git: git@github.com:shulhi/somerepo.git
+      git: git@github.com:plow-technologies/valentine.git
       commit: 23d3ef67
   - location:
-      git: git@github.com:shulhi/otherrepo.git
+      git: git@github.com:plow-technologies/live-vdom.git
       commit: 55ff22g3
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
