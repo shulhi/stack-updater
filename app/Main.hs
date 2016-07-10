@@ -2,10 +2,12 @@
 
 module Main where
 
-
+import Lib
 import System.IO
 import Control.Exception (bracket_)
 import Options.Applicative
+import qualified  Data.Text as T
+import qualified Data.Map.Lazy as M
 
 
 type RepoName = String
@@ -48,10 +50,8 @@ run :: Options -> IO ()
 run (Options cmd) = do
   user <- prompt "Username: "
   password <- getPassword
-  print user
-  print password
   case cmd of
-    Update repoName -> updateRepo repoName
+    Update repoName -> updateRepo repoName (user, password)
     Interactive -> print "Let's do it interactively"
 
 
@@ -84,6 +84,12 @@ withEcho echo action = do
 
 
 updateRepo :: String
+           -> (String, String)
            -> IO ()
-updateRepo repo = do
+updateRepo repo credential = do
+  gitLocations <- getGitLocations
+  case M.lookup (T.pack repo) gitLocations of
+    Nothing -> putStrLn $ "Repo " <> repo <> " is not found in stack.yaml"
+    Just info -> do
+      getCommits info credential
   return ()

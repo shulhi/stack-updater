@@ -5,12 +5,15 @@
 
 module Lib
     ( someFunc
+    , getGitLocations
+    , getCommits
     ) where
 
 
 import            Text.RawString.QQ
 import            Text.Regex (mkRegex, subRegex)
 
+import            Data.Bifunctor (bimap)
 import            Data.Text (Text)
 import qualified  Data.Text as T
 import            Data.ByteString (ByteString)
@@ -55,27 +58,36 @@ someFunc = do
   print $ (Y.decodeEither sampleYaml :: Either String Config)
 
 
-someFunc' :: IO ()
-someFunc' = do
+getGitLocations :: IO (Map Text GitInfo)
+getGitLocations = do
   contents <- BSL.unpack <$> readStackConfig "./sample-stack.yaml"
   e <- (Y.decodeEither <$> readStackConfig "./sample-stack.yaml") :: IO (Either String Config)
   case e of
-    Left _ -> putStrLn "parser error"
+    Left _ -> do
+      putStrLn "parser error"
+      return M.empty
     Right (Config packages) -> do
       let locations = catMaybes $ fmap (\p -> extractGitLocations p) packages
-          regexes = mkRegex . T.unpack . commit <$> locations
-          newContent = foldl (\content rgx -> subRegex rgx content "newcommit") contents regexes
           gitInfos = fmap (\loc -> GitInfo loc $ parseGitUrl . git $ loc) locations
-      sequence_ $ getCommits <$> gitInfos
+       --   regexes = mkRegex . T.unpack . commit <$> locations
+       --   newContent = foldl (\content rgx -> subRegex rgx content "newcommit") contents regexes
+      --sequence_ $ getCommits <$> gitInfos
+      return . M.fromList . catMaybes $ mkMap <$> gitInfos
   where
     extractGitLocations p = case location p of
                               RemoteLocation remote -> Just remote
                               _ -> Nothing
+    mkMap info = case gitDetails info of
+                   Left _ -> Nothing
+                   Right details -> Just (repoId details, info)
+    repoId details = (username details) <> "/" <> (repo details)
+
 
 
 getCommits :: GitInfo
+           -> (String, String)
            -> IO ()
-getCommits info = do
+getCommits info credential = do
   res <- runEitherT $ do
     details  <- hoistEither $ gitDetails info
     eCommits <- liftIO $ GH.commitsFor' (Just $ GH.BasicAuth user password) (mkUsername details) (mkRepo details)
@@ -88,10 +100,9 @@ getCommits info = do
       print info
       forM_ vcs (\vc -> print $ GH.gitCommitMessage (GH.commitGitCommit vc))
   where
-    user = "shulhi"
-    password = ""
     mkUsername = GH.mkOwnerName . username
     mkRepo = GH.mkRepoName . repo
+    (user, password) = bimap BSL.pack BSL.pack credential
 
 
 mkCommitMap :: GitDetails
@@ -100,6 +111,13 @@ mkCommitMap :: GitDetails
 mkCommitMap details commits = M.singleton repoId commits
   where
     repoId = (username details) <> "/" <> (repo details)
+
+
+mkGitId :: GitInfo
+        -> Maybe Text
+mkGitId info = case gitDetails info of
+                 Left _ -> Nothing
+                 Right details -> Just $ (username details) <> "/" <> (repo details)
 
 
 readStackConfig :: FilePath
