@@ -6,8 +6,14 @@ import Lib
 import System.IO
 import Control.Exception (bracket_)
 import Options.Applicative
+
+import Data.Vector
+import qualified  Data.Vector as V
 import qualified  Data.Text as T
-import qualified Data.Map.Lazy as M
+import qualified  Data.Map.Lazy as M
+import Text.Read (readMaybe)
+
+import qualified  GitHub.Endpoints.Repos.Commits as GH
 
 
 type RepoName = String
@@ -91,5 +97,26 @@ updateRepo repo credential = do
   case M.lookup (T.pack repo) gitLocations of
     Nothing -> putStrLn $ "Repo " <> repo <> " is not found in stack.yaml"
     Just info -> do
-      getCommits info credential
-  return ()
+      commits <- getCommits info credential
+      formatCommitDisplay commits
+      putStrLn "Select commit: "
+      selection <- prompt ">> "
+      print $ getSelection selection commits
+
+
+formatCommitDisplay :: Vector GH.Commit
+                    -> IO ()
+formatCommitDisplay = imapM_ displayInfo
+  where
+    displayInfo idx commit = do
+      putStrLn $ (show idx) <> " - " <> (show . commitSha $ commit) <> " " <> (show . commitMsg $ commit)
+    commitSha = GH.commitSha
+    commitMsg commit = GH.gitCommitMessage $ GH.commitGitCommit commit
+
+
+getSelection :: String
+             -> Vector GH.Commit
+             -> Maybe GH.Commit
+getSelection selectionIdx commits = case readMaybe selectionIdx of
+                                      Nothing -> Nothing
+                                      Just idx -> commits !? idx

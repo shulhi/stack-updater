@@ -27,6 +27,7 @@ import            Data.Attoparsec.Text
 import            Data.Attoparsec.Text as AT
 import            Data.Maybe (catMaybes, fromJust)
 import            Data.Monoid ((<>))
+import qualified  Data.Vector as V
 import            Data.Vector (Vector)
 import            Data.Map.Lazy (Map)
 import qualified  Data.Map.Lazy as M
@@ -86,7 +87,7 @@ getGitLocations = do
 
 getCommits :: GitInfo
            -> (String, String)
-           -> IO ()
+           -> IO (Vector GH.Commit)
 getCommits info credential = do
   res <- runEitherT $ do
     details  <- hoistEither $ gitDetails info
@@ -95,10 +96,10 @@ getCommits info credential = do
       Left err -> left $ show err
       Right commits -> right commits
   case res of
-    Left err -> print err
+    Left err -> return $ V.empty
     Right vcs -> do
-      print info
-      forM_ vcs (\vc -> print $ GH.gitCommitMessage (GH.commitGitCommit vc))
+      --forM_ vcs (\vc -> print $ GH.gitCommitMessage (GH.commitGitCommit vc))
+      return $ vcs
   where
     mkUsername = GH.mkOwnerName . username
     mkRepo = GH.mkRepoName . repo
