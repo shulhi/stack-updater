@@ -73,6 +73,15 @@ prompt text = do
   getLine
 
 
+confirm :: IO Bool
+confirm = do
+  putStrLn "Are you sure? y/N"
+  ans <- prompt ">> "
+  if ans == "y"
+     then return True
+     else return False
+
+
 -- http://stackoverflow.com/questions/4064378/prompting-for-a-password-in-haskell-command-line-application
 getPassword :: IO String
 getPassword = do
@@ -98,16 +107,29 @@ updateRepo repo credential = do
     Nothing -> putStrLn $ "Repo " <> repo <> " is not found in stack.yaml"
     Just info -> do
       commits <- getCommits info credential
-      formatCommitDisplay commits
+      formatCommitDisplay commits (Just 10)
       putStrLn "Select commit: "
       selection <- prompt ">> "
-      print $ getSelection selection commits
+      res <- confirm
+      case res of
+        False -> putStrLn "Aborting..."
+        True -> do
+          let oldCommit = T.unpack . commit . gitLocation $ info
+              mNewCommit = T.unpack . GH.untagName . GH.commitSha <$> getSelection selection commits
+          case mNewCommit of
+            Nothing -> putStrLn "Commit not found"
+            Just newCommit -> replaceCommit oldCommit newCommit
 
 
 formatCommitDisplay :: Vector GH.Commit
+                    -> Maybe Int
                     -> IO ()
-formatCommitDisplay = imapM_ displayInfo
+formatCommitDisplay commits mLimit = imapM_ displayInfo commits'
   where
+    limit = case mLimit of
+              Nothing -> 10
+              Just x -> x
+    commits' = V.take limit commits
     displayInfo idx commit = do
       putStrLn $ (show idx) <> " - " <> (show . commitSha $ commit) <> " " <> (show . commitMsg $ commit)
     commitSha = GH.commitSha

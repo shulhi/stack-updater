@@ -7,9 +7,13 @@ module Lib
     ( someFunc
     , getGitLocations
     , getCommits
+    , replaceCommit
+    , GitInfo(..)
+    , GitLocation(..)
     ) where
 
 
+import            System.IO (writeFile)
 import            Text.RawString.QQ
 import            Text.Regex (mkRegex, subRegex)
 
@@ -83,6 +87,23 @@ getGitLocations = do
                    Right details -> Just (repoId details, info)
     repoId details = (username details) <> "/" <> (repo details)
 
+
+replaceCommit :: String
+              -> String
+              -> IO ()
+replaceCommit old new = do
+  contents <- BSL.unpack <$> readStackConfig "./sample-stack.yaml"
+  e <- (Y.decodeEither <$> readStackConfig "./sample-stack.yaml") :: IO (Either String Config)
+  case e of
+    Left _ -> putStrLn "parser error"
+    Right (Config packages) -> do
+      let rgx = mkRegex old
+          newContent = subRegex rgx contents new
+      writeFile "./sample-stack.yaml" newContent
+  where
+    extractGitLocations p = case location p of
+                              RemoteLocation remote -> Just remote
+                              _ -> Nothing
 
 
 getCommits :: GitInfo
