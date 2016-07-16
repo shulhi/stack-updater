@@ -74,9 +74,6 @@ getGitLocations = do
     Right (Config packages) -> do
       let locations = catMaybes $ fmap (\p -> extractGitLocations p) packages
           gitInfos = fmap (\loc -> GitInfo loc $ parseGitUrl . git $ loc) locations
-       --   regexes = mkRegex . T.unpack . commit <$> locations
-       --   newContent = foldl (\content rgx -> subRegex rgx content "newcommit") contents regexes
-      --sequence_ $ getCommits <$> gitInfos
       return . M.fromList . catMaybes $ mkMap <$> gitInfos
   where
     extractGitLocations p = case location p of
@@ -118,9 +115,7 @@ getCommits info credential = do
       Right commits -> right commits
   case res of
     Left err -> return $ V.empty
-    Right vcs -> do
-      --forM_ vcs (\vc -> print $ GH.gitCommitMessage (GH.commitGitCommit vc))
-      return $ vcs
+    Right vcs -> return $ vcs
   where
     mkUsername = GH.mkOwnerName . username
     mkRepo = GH.mkRepoName . repo

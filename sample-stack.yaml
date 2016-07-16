@@ -6,7 +6,7 @@ packages:
   - location: something
   - location:
       git: git@github.com:plow-technologies/valentine.git
-      commit: 23d3ef67
+      commit: dbc486b4b47abd4710a1c19db692fd7771e74a32
   - location:
       git: git@github.com:plow-technologies/live-vdom.git
       commit: 55ff22g3
