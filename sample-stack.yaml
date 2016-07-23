@@ -9,7 +9,7 @@ packages:
       commit: dbc486b4b47abd4710a1c19db692fd7771e74a32
   - location:
       git: git@github.com:plow-technologies/live-vdom.git
-      commit: 55ff22g3
+      commit: 3f20c963ea02a263236f25a612999b4c65a84c3f
 extra-deps: []
 
 # Override default flag values for local packages and extra-deps

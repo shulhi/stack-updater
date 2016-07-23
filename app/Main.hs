@@ -13,6 +13,7 @@ import qualified  Data.Vector as V
 import qualified  Data.Text as T
 import qualified  Data.Map.Lazy as M
 import Text.Read (readMaybe)
+import Data.Maybe (fromMaybe)
 
 import qualified  GitHub.Endpoints.Repos.Commits as GH
 
@@ -25,7 +26,9 @@ data Command
   | Interactive
 
 
-data Options = Options Command
+data Options = Options
+  { getPath :: Maybe FilePath
+  , getCommand:: Command }
 
 
 main :: IO ()
@@ -34,7 +37,11 @@ main = run =<< execParser
 
 
 parseOptions :: Parser Options
-parseOptions = Options <$> parseCommand
+parseOptions = Options <$> parsePath <*> parseCommand
+
+
+parsePath :: Parser (Maybe FilePath)
+parsePath = optional $ strOption ( long "path" <> short 'f' <> metavar "STACK-YAML-PATH" <> help "Specify location to stack.yaml" )
 
 
 parseCommand :: Parser Command
@@ -48,13 +55,15 @@ parseUpdate = Update <$> (optional $ argument str (metavar "REPO-NAME"))
 
 -- Actual program logic
 run :: Options -> IO ()
-run (Options cmd) = do
+run (Options mPath cmd) = do
   user <- prompt "Username: "
   password <- getPassword
   case cmd of
-    Update Nothing -> displayGitLocations (user, password)
-    Update (Just repoName) -> updateRepo repoName (user, password)
+    Update Nothing -> displayGitLocations stackPath (user, password)
+    Update (Just repoName) -> updateRepo stackPath (user, password) repoName
     _ -> print "Not supported yet"
+  where
+    stackPath = fromMaybe "stack.yaml" mPath
 
 
 withInfo :: Parser a -> String -> ParserInfo a
@@ -94,40 +103,43 @@ withEcho echo action = do
   bracket_ (hSetEcho stdin echo) (hSetEcho stdin old) action
 
 
-updateRepo :: String
+updateRepo :: FilePath
            -> (String, String)
+           -> String
            -> IO ()
-updateRepo repo credential = do
-  gitLocations <- getGitLocations
+updateRepo fp credential repo = do
+  gitLocations <- getGitLocations fp
   case M.lookup (T.pack repo) gitLocations of
     Nothing -> putStrLn $ "Repo " <> repo <> " is not found in stack.yaml"
     Just info -> do
       commits <- getCommits info credential
-      displaySelectCommit commits info
+      displaySelectCommit fp commits info
 
 
-updateRepo' :: GitInfo
+updateRepo' :: FilePath
             -> (String, String)
+            -> GitInfo
             -> IO ()
-updateRepo' info credential = do
+updateRepo' fp credential info = do
   commits <- getCommits info credential
-  displaySelectCommit commits info
+  displaySelectCommit fp commits info
 
 
-displayGitLocations :: (String, String)
+displayGitLocations :: FilePath
+                    -> (String, String)
                     -> IO ()
-displayGitLocations credential = do
-  gitLocations <- getGitLocations
+displayGitLocations fp credential = do
+  gitLocations <- getGitLocations fp
   putStrLn "Github repos: "
   formatGitLocationDisplay $ M.keys gitLocations
   selection <- prompt ">> "
   res <- confirm
   case res of
-    False -> displayGitLocations credential
+    False -> displayGitLocations fp credential
     True -> do
       let mSelected = getSelection selection $ V.fromList $ M.keys gitLocations
           mInfo = join $ flip M.lookup gitLocations <$> mSelected
-      sequence_ $ flip updateRepo' credential <$> mInfo
+      sequence_ $ updateRepo' fp credential <$> mInfo
 
 
 formatGitLocationDisplay :: [T.Text]
@@ -138,22 +150,23 @@ formatGitLocationDisplay locations = imapM_ displayLocation $ V.fromList locatio
       putStrLn $ (show idx) <> " - " <> (T.unpack loc)
 
 
-displaySelectCommit :: Vector GH.Commit
+displaySelectCommit :: FilePath
+                    -> Vector GH.Commit
                     -> GitInfo
                     -> IO ()
-displaySelectCommit commits info = do
+displaySelectCommit fp commits info = do
   putStrLn "Latest 10 commits. Please select commit: "
   formatCommitDisplay commits (Just 10)
   selection <- prompt ">> "
   res <- confirm
   case res of
-    False -> displaySelectCommit commits info
+    False -> displaySelectCommit fp commits info
     True -> do
       let oldCommit = T.unpack . commit . gitLocation $ info
           mNewCommit = T.unpack . GH.untagName . GH.commitSha <$> getSelection selection commits
       case mNewCommit of
         Nothing -> putStrLn "Selection invalid or commit not found"
-        Just newCommit -> replaceCommit oldCommit newCommit
+        Just newCommit -> replaceCommit fp oldCommit newCommit
 
 
 formatCommitDisplay :: Vector GH.Commit

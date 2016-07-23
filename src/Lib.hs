@@ -63,10 +63,11 @@ someFunc = do
   print $ (Y.decodeEither sampleYaml :: Either String Config)
 
 
-getGitLocations :: IO (Map Text GitInfo)
-getGitLocations = do
-  contents <- BSL.unpack <$> readStackConfig "./sample-stack.yaml"
-  e <- (Y.decodeEither <$> readStackConfig "./sample-stack.yaml") :: IO (Either String Config)
+getGitLocations :: FilePath
+                -> IO (Map Text GitInfo)
+getGitLocations fp = do
+  contents <- BSL.unpack <$> readStackConfig fp
+  e <- (Y.decodeEither <$> readStackConfig fp) :: IO (Either String Config)
   case e of
     Left _ -> do
       putStrLn "parser error"
@@ -85,18 +86,19 @@ getGitLocations = do
     repoId details = (username details) <> "/" <> (repo details)
 
 
-replaceCommit :: String
+replaceCommit :: FilePath
+              -> String
               -> String
               -> IO ()
-replaceCommit old new = do
-  contents <- BSL.unpack <$> readStackConfig "./sample-stack.yaml"
-  e <- (Y.decodeEither <$> readStackConfig "./sample-stack.yaml") :: IO (Either String Config)
+replaceCommit fp old new = do
+  contents <- BSL.unpack <$> readStackConfig fp
+  e <- (Y.decodeEither <$> readStackConfig fp) :: IO (Either String Config)
   case e of
     Left _ -> putStrLn "parser error"
     Right (Config packages) -> do
       let rgx = mkRegex old
           newContent = subRegex rgx contents new
-      writeFile "./sample-stack.yaml" newContent
+      writeFile fp newContent
   where
     extractGitLocations p = case location p of
                               RemoteLocation remote -> Just remote
