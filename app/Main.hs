@@ -5,7 +5,7 @@ module Main where
 import Lib
 import System.IO
 import Control.Exception (bracket_)
-import Control.Monad (void, join, sequence_)
+import Control.Monad (join)
 import Options.Applicative
 
 import Data.Vector (Vector, imapM_, (!?))
@@ -41,7 +41,7 @@ parseOptions = Options <$> parsePath <*> parseCommand
 
 
 parsePath :: Parser (Maybe FilePath)
-parsePath = optional $ strOption ( long "path" <> short 'f' <> metavar "STACK-YAML-PATH" <> help "Specify location to stack.yaml" )
+parsePath = optional $ strOption ( long "path" <> short 'f' <> metavar "STACK-YAML" <> help "Specify location to stack.yaml" )
 
 
 parseCommand :: Parser Command
@@ -98,9 +98,9 @@ getPassword = do
 
 
 withEcho :: Bool -> IO a -> IO a
-withEcho echo action = do
+withEcho echo action' = do
   old <- hGetEcho stdin
-  bracket_ (hSetEcho stdin echo) (hSetEcho stdin old) action
+  bracket_ (hSetEcho stdin echo) (hSetEcho stdin old) action'
 
 
 updateRepo :: FilePath
@@ -111,18 +111,18 @@ updateRepo fp credential repo = do
   gitLocations <- getGitLocations fp
   case M.lookup (T.pack repo) gitLocations of
     Nothing -> putStrLn $ "Repo " <> repo <> " is not found in stack.yaml"
-    Just info -> do
-      commits <- getCommits info credential
-      displaySelectCommit fp commits info
+    Just gitInfo -> do
+      commits <- getCommits gitInfo credential
+      displaySelectCommit fp commits gitInfo
 
 
 updateRepo' :: FilePath
             -> (String, String)
             -> GitInfo
             -> IO ()
-updateRepo' fp credential info = do
-  commits <- getCommits info credential
-  displaySelectCommit fp commits info
+updateRepo' fp credential gitInfo = do
+  commits <- getCommits gitInfo credential
+  displaySelectCommit fp commits gitInfo
 
 
 displayGitLocations :: FilePath
@@ -154,15 +154,15 @@ displaySelectCommit :: FilePath
                     -> Vector GH.Commit
                     -> GitInfo
                     -> IO ()
-displaySelectCommit fp commits info = do
+displaySelectCommit fp commits gitInfo = do
   putStrLn "Latest 10 commits. Please select commit: "
   formatCommitDisplay commits (Just 10)
   selection <- prompt ">> "
   res <- confirm
   case res of
-    False -> displaySelectCommit fp commits info
+    False -> displaySelectCommit fp commits gitInfo
     True -> do
-      let oldCommit = T.unpack . commit . gitLocation $ info
+      let oldCommit = T.unpack . commit . gitLocation $ gitInfo
           mNewCommit = T.unpack . GH.untagName . GH.commitSha <$> getSelection selection commits
       case mNewCommit of
         Nothing -> putStrLn "Selection invalid or commit not found"
@@ -178,10 +178,10 @@ formatCommitDisplay commits mLimit = imapM_ displayInfo commits'
               Nothing -> 10
               Just x -> x
     commits' = V.take limit commits
-    displayInfo idx commit = do
-      putStrLn $ (show idx) <> " - " <> (T.unpack . commitSha $ commit) <> " " <> (T.unpack . commitMsg $ commit)
+    displayInfo idx commit' = do
+      putStrLn $ (show idx) <> " - " <> (T.unpack . commitSha $ commit') <> " " <> (T.unpack . commitMsg $ commit')
     commitSha = GH.untagName . GH.commitSha
-    commitMsg commit = GH.gitCommitMessage $ GH.commitGitCommit commit
+    commitMsg commit' = GH.gitCommitMessage $ GH.commitGitCommit commit'
 
 
 getSelection :: String
