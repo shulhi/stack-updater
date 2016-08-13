@@ -2,19 +2,21 @@
 
 module Main where
 
-import Lib
-import Types (GitInfo(..), GitLocation(..))
-import System.IO
-import Control.Exception (bracket_)
-import Control.Monad (join)
-import Options.Applicative
+import            Lib
+import            Types (GitInfo(..), GitLocation(..), AppError(..))
+import            System.IO
+import            Control.Exception (bracket_)
+import            Control.Monad (join)
+import            Control.Monad.IO.Class (liftIO)
+import            Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import            Options.Applicative
 
-import Data.Vector (Vector, imapM_, (!?))
+import            Data.Vector (Vector, imapM_, (!?))
 import qualified  Data.Vector as V
 import qualified  Data.Text as T
 import qualified  Data.Map.Lazy as M
-import Text.Read (readMaybe)
-import Data.Maybe (fromMaybe)
+import            Text.Read (readMaybe)
+import            Data.Maybe (fromMaybe)
 
 import qualified  GitHub.Endpoints.Repos.Commits as GH
 
@@ -67,41 +69,57 @@ run (Options mPath cmd) = do
     stackPath = fromMaybe "stack.yaml" mPath
 
 
+-- | Handle user interaction starting from showing repos,
+-- then commits, and do the update
+handleUpdate :: IO ()
+handleUpdate = do
+  return ()
+--  selectedRepo   <- showGitRepos stackPath (user, password)
+--  selectedCommit <- showCommits
+--  updateStackYaml selectedCommit
+
+
+-- | Similar like 'handleUpdate' but skip the first step since
+-- user has explicity specify a repo
+handleUpdateWithRepo :: IO ()
+handleUpdateWithRepo = return ()
+
+
+showGitRepos :: FilePath
+             -> (String, String)
+             -> ExceptT AppError IO GitInfo
+showGitRepos fp credential = do
+  mInfo <- liftIO $
+    do putStrLn "Github repos: "
+       gitLocations <- getGitLocations fp
+       formatGitLocationDisplay $ M.keys gitLocations
+       selection <- prompt ">> "
+       res <- confirm
+       case res of
+         False -> runExceptT $ showGitRepos fp credential
+         True  -> let mSelected = getSelection selection $ V.fromList $ M.keys gitLocations
+                      mInfo = join $ flip M.lookup gitLocations <$> mSelected
+                  in mInfo
+  case mInfo of
+    Nothing -> throwE RepoNotFound
+    Just gitInfo -> return gitInfo
+
+
+showCommits :: GitInfo
+            -> IO ()
+showCommits _ = return ()
+
+
+updateStackYaml :: IO ()
+updateStackYaml = return ()
+
+
+
+
+
+
 withInfo :: Parser a -> String -> ParserInfo a
 withInfo opts desc = info (helper <*> opts) $ progDesc desc
-
-
-prompt :: String
-       -> IO String
-prompt text = do
-  putStr text
-  hFlush stdout
-  getLine
-
-
-confirm :: IO Bool
-confirm = do
-  putStrLn "Are you sure? y/N"
-  ans <- prompt ">> "
-  if ans == "y"
-     then return True
-     else return False
-
-
--- http://stackoverflow.com/questions/4064378/prompting-for-a-password-in-haskell-command-line-application
-getPassword :: IO String
-getPassword = do
-  putStr "Password: "
-  hFlush stdout
-  pass <- withEcho False getLine
-  putChar '\n'
-  return pass
-
-
-withEcho :: Bool -> IO a -> IO a
-withEcho echo action' = do
-  old <- hGetEcho stdin
-  bracket_ (hSetEcho stdin echo) (hSetEcho stdin old) action'
 
 
 updateRepo :: FilePath
@@ -191,3 +209,39 @@ getSelection :: String
 getSelection selectionIdx choices = case readMaybe selectionIdx of
                                       Nothing -> Nothing
                                       Just idx -> choices !? idx
+
+{-
+ - Util functions
+-}
+
+prompt :: String
+       -> IO String
+prompt text = do
+  putStr text
+  hFlush stdout
+  getLine
+
+
+confirm :: IO Bool
+confirm = do
+  putStrLn "Are you sure? y/N"
+  ans <- prompt ">> "
+  if ans == "y"
+     then return True
+     else return False
+
+
+-- http://stackoverflow.com/questions/4064378/prompting-for-a-password-in-haskell-command-line-application
+getPassword :: IO String
+getPassword = do
+  putStr "Password: "
+  hFlush stdout
+  pass <- withEcho False getLine
+  putChar '\n'
+  return pass
+
+
+withEcho :: Bool -> IO a -> IO a
+withEcho echo action' = do
+  old <- hGetEcho stdin
+  bracket_ (hSetEcho stdin echo) (hSetEcho stdin old) action'

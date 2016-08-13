@@ -12,6 +12,7 @@ import            Data.Yaml                   ( Object(..)
                                               , (.:?) )
 import            Control.Applicative
 
+data AppError = RepoNotFound
 
 data GitInfo = GitInfo
   { gitLocation :: GitLocation
