@@ -3,6 +3,7 @@
 module Main where
 
 import Lib
+import Types (GitInfo(..), GitLocation(..))
 import System.IO
 import Control.Exception (bracket_)
 import Control.Monad (join)

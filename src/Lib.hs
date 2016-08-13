@@ -8,11 +8,9 @@ module Lib
     , getGitLocations
     , getCommits
     , replaceCommit
-    , GitInfo(..)
-    , GitLocation(..)
     ) where
 
-
+import            Types
 import            System.IO (writeFile)
 import            Text.RawString.QQ
 import            Text.Regex (mkRegex, subRegex)
@@ -20,13 +18,10 @@ import            Text.Regex (mkRegex, subRegex)
 import            Data.Bifunctor (bimap)
 import            Data.Text (Text)
 import qualified  Data.Text as T
+import qualified  Data.Yaml                   as Y
 import            Data.ByteString (ByteString)
 import qualified  Data.ByteString as BS
 import qualified  Data.ByteString.Char8 as BSL
-import qualified  Data.Yaml as Y
-import            Data.Yaml ( FromJSON(..)
-                            , (.:)
-                            , (.:?) )
 import            Data.Attoparsec.Text
 import            Data.Attoparsec.Text as AT
 import            Data.Maybe (catMaybes, fromJust)
@@ -36,7 +31,6 @@ import            Data.Vector (Vector)
 import            Data.Map.Lazy (Map)
 import qualified  Data.Map.Lazy as M
 
-import            Control.Applicative
 import            Control.Monad (forM_)
 import            Control.Monad.Trans (liftIO)
 import            Control.Monad.Trans.Either (EitherT, runEitherT, hoistEither, left, right)
@@ -166,59 +160,3 @@ parseGitSsh = do
   AT.take 1
   repo <- takeTill (=='.')
   return GitDetails{..}
-
-
-data GitInfo = GitInfo
-  { gitLocation :: GitLocation
-  , gitDetails :: Either String GitDetails
-  } deriving (Show, Eq)
-
-
-data GitDetails = GitDetails
-  { username :: Text
-  , repo     :: Text
-  } deriving (Show, Eq)
-
-
-data Config = Config
-  { packages :: [Package]
-  } deriving (Show, Eq)
-
-
-data Package = Package
-  { location :: Location
-  } deriving (Show, Eq)
-
-
-data Location = SimpleLocation Text
-              | RemoteLocation GitLocation
-              | NotSupportedLocation
-  deriving (Show, Eq)
-
-
-data GitLocation = GitLocation
-  { git :: Text
-  , commit :: Text
-  } deriving (Show, Eq)
-
-
-instance FromJSON Config where
-  parseJSON (Y.Object v) = Config <$> v .: "packages"
-  parseJSON _ = fail "Expected object for config value"
-
-
-instance FromJSON Package where
-  parseJSON (Y.Object v) = Package <$> v .: "location"
-  parseJSON _ = fail "Expected object for config value"
-
-
-instance FromJSON Location where
-  parseJSON v =   (SimpleLocation <$> parseJSON v)
-              <|> (RemoteLocation <$> parseJSON v)
-              <|> pure NotSupportedLocation
-
-
-instance FromJSON GitLocation where
-  parseJSON (Y.Object v) = GitLocation <$> v .: "git"
-                                       <*> v .: "commit"
-  parseJSON _ = fail "Expected object for config value"
